@@ -1,6 +1,6 @@
 # Makefile for ECS Service Notifications
 
-.PHONY: get synth deploy destroy
+.PHONY: get synth deploy destroy lambda
 
 # Default target
 default: get

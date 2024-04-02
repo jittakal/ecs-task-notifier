@@ -1,6 +1,6 @@
 # Amazon Elastic Container Service (ECS)
 
-Amazon Elastic Container Service (ECS) provides a fully managed container service solution. It facilitate deployment, scalaing and high availability of containerized workloads. 
+Amazon Elastic Container Service (ECS) is a fully managed solution for container services that simplifies deployment, and auto-scaling and ensures high availability of containerized workloads.
 
 
 ![Amazon ECS Service Task](./docs/images/ecs_service.png)
@@ -8,7 +8,7 @@ Amazon Elastic Container Service (ECS) provides a fully managed container servic
 
 **Capacity Providers:**
 
-Define infrastructure workload capacity offers two options i.e. EC2 Instance or Fargate. ECS service task container running on compute infrastructure.
+Amazon ECS capacity provider manage the scaling of infrastructure for tasks in ECS cluster. Capacity providers are available for tasks that run on Fargate or on Amazon EC2 instances.
 
 **ECS Service:**
 
@@ -26,19 +26,21 @@ Amazon Elastic Load Balancer (ALB/NLB) use to route the incoming traffic to heal
 
 ## Problem Overview
 
-The PoC is to triggering each ECS Task of an ECS Service within an ECS Cluster using Event-Driven Architecture
+<em>Notify each ECS Task running of an ECS Service having provision to notify running within an ECS Cluster using Event-Driven Architecture</em>
 
-Consider a scenario where we have to send event notification to indivusual task running within ECS service on such event container will take certain action. With passing request through a routing wont help as request will be handled by only one of ECS Task.
+Consider scenarion where we need to notify a ECS task running within an ECS service about a specific event, and based on that event, the container needs to perform a certain action. In this case, simply passing requests through a routing won't be helpful, since the requests will only be handled by one of the ECS tasks.
+
 
 ## Solution Overview
 
 
-### Assumptions
+### Design Considerations
 
-- The containerized application is deployed as a microservices application (REST API).
+- The containerized application is deployed as a microservices application utilizing REST APIs.
 - The Task Definition includes a key-value pair under `dockerlabels` key, such as `NOTIFY_ME_CONTAINER_PORT` and  `NOTIFY_ME_API_URI`. This value indicates which ECS Services are candidates to receive event notifications.
 - A Notify API is hosted by a container within the microservice application. for e.g. `/v1.0/notify`
-- The ECS Cluster uses EC2 instances as its capacity provider.
+- The Notify API is implemented using an asynchronous approach.
+- The ECS Cluster utilizes EC2 instances as its capacity provider.
 - The EC2 instances for the ECS Cluster run within private subnets of a VPC.
 
 
@@ -52,7 +54,7 @@ Consider a scenario where we have to send event notification to indivusual task 
 
 In an AWS environment, various services can function as observer services. These may include DynamoDB streams, AWS S3 object lifecycle events, and messages/events received on Amazon SQS.
 
-As part of the proof of concept (PoC), chosen to publish events to an Amazon SQS queue as an event notification. ECS tasks designated as event subscribers will be notified of these events by invoking a Notify API endpoint, for example, `/v1.0/notify` API.
+As part of the proof of concept (PoC), I used SQS, publish events to an Amazon SQS queue as an event notification. ECS tasks designated as event subscribers will be notified of these events by invoking a Notify API endpoint, for example, `/v1.0/notify` API.
 
 ```json
 {
@@ -64,11 +66,12 @@ Not all ECS services need to be event subscribers. By leveraging a `dockerlabels
 
 **Task Notifier:**
 
-The Task Notifier is implemented adhering to the event-driven architecture modern pattern, leveraging AWS serverless services such as three Lambda functions and two SQS queues to execute notification triggering concurrently.
+The Task Notifier is implemented following the modern event-driven architecture pattern, leveraging AWS serverless services. Specifically, it utilizes three Lambda functions and two SQS queues to trigger notifications concurrently.
 
 - ECS Service Discovery Lambda:
 
-This Lambda function is triggered by messages in the observer SQS queue. It retrieves a list of all ECS services for the specified cluster and filters those with specific key-value pairs, such as `NOTIFY_ME_CONTAINER_PORT` and `NOTIFY_ME_API_URI`, part of the dockerlabels section in the TaskDefinition. It then prepares a message for each filtered ECS service and publishes it to the `ecs_service` SQS queue for further processing.
+This Lambda function is triggered by messages in the observer SQS queue. It retrieves a list of all ECS services for the specified cluster and filters them based on specific key-value pairs, such as `NOTIFY_ME_CONTAINER_PORT` and `NOTIFY_ME_API_URI`, which are part of the `dockerlabels` section in the TaskDefinition. Subsequently, it prepares a message for each filtered ECS service and publishes it to the `ecs_service` SQS queue for further processing.
+
 
 ```json
 {
@@ -81,11 +84,12 @@ This Lambda function is triggered by messages in the observer SQS queue. It retr
 
 - ECS Service Task Discovery Lambda:
 
-Triggered by messages in the `ecs_service` SQS queue, this Lambda function retrieves details for all ECS tasks based on the cluster and service name provided. It gathers information such as IP address, host port, and notification API URI, then publishes these details to the `ecs_service_tasks` SQS queue.
+Triggered by messages in the `ecs_service` SQS queue, this Lambda function retrieves details for all ECS tasks based on the cluster and service name provided. It gathers essential information, including IP address, host port, and notification API URI. Subsequently, it publishes these details to the `ecs_service_tasks` SQS queue for further processing.
+
 
 ```json
 {
-    "notify_task_arn": "notify_task_arn", // Used for logging and auditing
+    "notify_task_arn": "notify_task_arn",
     "notify_me_host_address": "notify_me_host_address",
     "notify_me_host_port": "notify_me_host_port",
     "notify_me_api_uri": "notify_me_api_uri"
@@ -101,12 +105,21 @@ Triggered by messages in the `ecs_service_tasks` SQS queue, this Lambda function
 
 ## Pre-requisites
 
-- VPC two private subnet id's
-- Security Group for Lambda function
+- Two private subnet IDs within the VPC
+- A Security Group configured for the Lambda function
+
+
+## Infrastructure as a Code
+
+I utilized Terraform CDK (Cloud Development Kit) to provision the identified infrastructure design. Terraform CDK allows for programmatically defining cloud resources using familiar programming languages like Golang, Python or TypeScript, providing the flexibility to create infrastructure as code (IaC) in a scalable and maintainable manner. 
+
+With Terraform CDK, I could efficiently model and deploy the ECS Task Notifier related AWS resources.
 
 
 
 ![Amazon ECS Service Task IaC](./docs/images/ecs_task_notifier_iac.png)
+
+List of AWS Resources provisioned using Terraform CDK as follows.
 
 | Sr.No. | AWS Service      | Name                                  | Purpose                         |
 |--------|------------------|---------------------------------------|---------------------------------|
@@ -121,14 +134,137 @@ Triggered by messages in the `ecs_service_tasks` SQS queue, this Lambda function
 
 ## Out of scope
 
-- ECS Cluster
-- Micro-services deployed as a containerized application
-- VPC Network
+- ECS cluster setup
+- Deployment of microservices as a containerized application
+- VPC network setup
 
 # How to Use
 
-**TODO** Steps to provision infrastructure and test.
+
+- Setting up Terraform CDK
+
+Follow the official documentation to setup Node.js and npm on your operating system.
+Install Terraform CDK globally using npm. Run the following command
+
+```shell
+$ sudo npm install -g cdktf-cli
+
+$ # validate installation
+$ cdktf --version
+```
+
+- Setting up AWS CLI and configure
+
+Follow the official documentation to setup AWS CLI and configure default profile having Administrator level rights.
+
+- Github clone `ecs-task-notifier` repository
+
+```shell
+$ git clone https://github.com/jittakal/ecs-task-notifier.git
+$ cd ecs-task-notifier
+```
+
+- Deploy ECS Task Notifier Stack
+
+Update default values as per AWS pre-requisite setup
+
+```golang
+# main.go
+awsRegion = "us-east-1"
+
+_awsVpcPrivateSubnetId1   = "subnet-xxxxxxx"
+_awsVpcPrivateSubnetId2   = "subnet-xxxxxxx"
+_awsLambdaSecurityGroupId = "sg-xxxxxxx"
+```
+
+Deploy the stack
+
+```shell
+$ make get # required first time
+
+$ make lambda # build lambda binaries on linux by default
+
+$ make deploy # deploy the stack
+```
+
+Publish a message to the SQS queue named `ecs_service_notification_aws_region` using the AWS Management Console or any sample test program. Afterward, monitor the AWS Lambda function logs to observe the execution and handling of the message does it trigger Notify API.
+
+
+```json
+{
+    "cluster": "ecs_cluster_name"
+}
+```
+
+Sample code to publish event to SQS.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+)
+
+func main() {
+	// Load AWS configuration from the default profile
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		fmt.Println("Error loading AWS configuration:", err)
+		os.Exit(1)
+	}
+	client := sqs.NewFromConfig(cfg)
+
+	// Define the message body
+    // Replace ecs_cluster_name with your cluster name
+	messageBody := `{"cluster": "ecs_cluster_name"}`
+
+	// Define the queue URL
+    // Replace SQS URL from the stack output
+	queueURL := "ecs_service_notification_aws_region_queue_url"
+
+	// Send message to SQS queue
+	result, err := client.SendMessage(context.Background(), &sqs.SendMessageInput{
+		MessageBody: aws.String(messageBody),
+		QueueUrl:    &queueURL,
+	})
+	if err != nil {
+		fmt.Println("Error sending message to queue:", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Message sent successfully:", *result.MessageId)
+}
+```
+
+```shell
+$ go run main.go
+```
+
+- Destroy ECS Task Notifier Stack
+
+```shell
+$ make destroy
+```
+
+
+# What Next?
+
+- Implement Authentication Support for Notify API
+- Pass Event Messages to Notify API
+- Introduce Dead Letter Queue (DLQ)
+- Audit Details to DynamoDB Table
+- Validate for large-scale clusters comprising EC2 instances and ECS services.
+- Add support for DynamoDB stream and AWS S3 object lifecycle event source.
+
 
 # Reference
 
-- ToDo
+- [AWS blog reference use of SNS & SQS ](https://aws.amazon.com/blogs/compute/building-dynamic-amazon-sns-subscriptions-for-auto-scaling-container-workloads/)
+
+Each container instance actively polls its designated ECS task-specific queue to receive messages and promptly acts upon them.

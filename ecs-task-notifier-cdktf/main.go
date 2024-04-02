@@ -20,13 +20,18 @@ import (
 )
 
 const (
+	// To be change as per needs
 	awsRegion = "us-east-1"
 
+	// To be change as per needs
 	_awsVpcPrivateSubnetId1   = "subnet-xxxxxxx"
 	_awsVpcPrivateSubnetId2   = "subnet-xxxxxxx"
 	_awsLambdaSecurityGroupId = "sg-xxxxxxx"
 
 	lambdaZipBucketName = "ecs-task-notifier-lambdas"
+
+	// To be change as per tests and timeout needs
+	lambdaTimeout = 10.0
 
 	ecsServiceNotificationQueueName = "ecs-service-notification"
 	ecsServiceQueueName             = "ecs-services"
@@ -230,6 +235,7 @@ func NewMyStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		Role:           lambdaRole.Arn(),
 		Runtime:        aws.String("provided.al2"),
 		Handler:        aws.String("main"),
+		Timeout:        aws.Float64(lambdaTimeout),
 		SourceCodeHash: hash,
 		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
 			SecurityGroupIds: &[]*string{awsLambdaSecurityGroupId.StringValue()},
@@ -282,6 +288,7 @@ func NewMyStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		Role:           lambdaRole.Arn(),
 		Runtime:        aws.String("provided.al2"),
 		Handler:        aws.String("main"),
+		Timeout:        aws.Float64(lambdaTimeout),
 		SourceCodeHash: taskLambdaHash,
 		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
 			SecurityGroupIds: &[]*string{awsLambdaSecurityGroupId.StringValue()},
@@ -328,6 +335,7 @@ func NewMyStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		Role:           lambdaRole.Arn(),
 		Runtime:        aws.String("provided.al2"),
 		Handler:        aws.String("main"),
+		Timeout:        aws.Float64(lambdaTimeout),
 		SourceCodeHash: notifyLambdaHash,
 		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
 			SecurityGroupIds: &[]*string{awsLambdaSecurityGroupId.StringValue()},
