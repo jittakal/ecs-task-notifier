@@ -151,6 +151,7 @@ func (awsService *AWSService) listContainerInstances(ctx context.Context, cluste
 	return containerInstanceIpAddresses, nil
 }
 
+// List of all ECS Tasks of an ECS Service
 func (awsService *AWSService) DiscoverServiceTasks(ctx context.Context, serviceMessage *ServiceMessage) ([]*TaskNotifyMessage, error) {
 
 	requestId := RequestIdFromContext(ctx)
