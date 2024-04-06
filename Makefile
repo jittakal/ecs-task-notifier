@@ -1,6 +1,9 @@
-# Makefile for ECS Service Notifications
+# Makefile for Amazon ECS Task Notifier 
 
-.PHONY: get synth deploy destroy lambda
+# Default AWS Region (change this value as needed)
+AWS_REGION ?= us-east-1
+
+.PHONY: get synth deploy destroy lambda test
 
 # Default target
 default: get
@@ -53,3 +56,8 @@ lambda:
 		go fmt && \
 		mkdir -p dist && \
 		GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o ./dist/bootstrap main.go
+
+test:
+	@echo "Testing ecs-task-notifier ..."
+	@cd ecs-task-notifier-test && \
+		go run main.go -r $(AWS_REGION) -c $(ECS_CLUSTER_NAME) -q $(SQS_QUEUE_NAME)
